@@ -2,6 +2,9 @@
 
 A small web app to visualize a nested JSON structure as an interactive, searchable tree.
 
+### Live URL
+- @https://structure-viewer-5hxxx4mcj-gil-ecksteins-projects.vercel.app/
+
 ### Prerequisites
 - Node.js 18+
 - Yarn
