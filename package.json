@@ -1,0 +1,16 @@
+{
+  "name": "structure-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Simple JSON structure viewer",
+  "main": "app.js",
+  "scripts": {
+    "start": "serve -l 5173 .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "serve": "^14.2.3"
+  }
+}

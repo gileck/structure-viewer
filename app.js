@@ -71,11 +71,18 @@
     // If namingQuery resolves and has a name, append it to the title
     let displayId = id;
     try {
-      if (node && node.namingQuery) {
-        const resolvedNaming = resolveQueryValue('namingQuery', node.namingQuery);
-        if (resolvedNaming && typeof resolvedNaming === 'object' && !Array.isArray(resolvedNaming) && typeof resolvedNaming.name === 'string' && resolvedNaming.name.trim()) {
-          displayId = `${id} (${resolvedNaming.name})`;
-          try { console.log('Applied naming to title:', id, '->', displayId); } catch (_) {}
+      if (node) {
+        let namingName = null;
+        if (typeof node.namingQuery === 'string') {
+          const resolvedNaming = resolveQueryValue('namingQuery', node.namingQuery);
+          if (resolvedNaming && typeof resolvedNaming === 'object' && !Array.isArray(resolvedNaming) && typeof resolvedNaming.name === 'string' && resolvedNaming.name.trim()) {
+            namingName = resolvedNaming.name.trim();
+          }
+        } else if (node.namingQuery && typeof node.namingQuery === 'object' && typeof node.namingQuery.name === 'string') {
+          namingName = node.namingQuery.name.trim();
+        }
+        if (namingName) {
+          displayId = `${id} (${namingName})`;
         }
       }
     } catch (_) { /* ignore resolution errors for title */ }
@@ -339,8 +346,7 @@
           for (const id of tryIds) {
             if (id in dataMap) {
               const resolved = dataMap[id];
-              console.log(`Resolved ${key} via ${dataMapKey} in container: ${value} ->`, typeof resolved, resolved);
-              return resolved;
+                        return resolved;
             }
           }
         }
@@ -355,8 +361,7 @@
         for (const id of tryIds) {
           if (id in candidate) {
             const resolved = candidate[id];
-            console.log(`Resolved ${key} via fallback ${mapKey} in container: ${value} ->`, typeof resolved, resolved);
-            return resolved;
+                      return resolved;
           }
         }
       }

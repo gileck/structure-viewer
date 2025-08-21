@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Structure Viewer</title>
+  <script defer src="app.js"></script>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Simple nested menu viewer for a component structure JSON">
+  <link rel="stylesheet" crossorigin href="/assets/index-CCHs0dbO.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Structure Viewer</h1>
+    <p class="subtitle">View your JSON structure as a nested tree</p>
+  </header>
+
+  <section class="controls">
+    <label class="file-input">
+      <span>Select JSON file</span>
+      <input id="fileInput" type="file" accept="application/json">
+    </label>
+    <button id="loadDefaultBtn" type="button">Load default JSON</button>
+    <span id="status" class="status" aria-live="polite"></span>
+  </section>
+
+  <section class="toolbar" role="toolbar" aria-label="Tree actions">
+    <div class="group">
+      <button id="expandAll" type="button" title="Expand all">Expand all</button>
+      <button id="collapseAll" type="button" title="Collapse all">Collapse all</button>
+      <button id="printStructure" type="button" title="Print structure to console">🖨️</button>
+      <button id="printJSON" type="button" title="Print entire JSON to console">📋</button>
+    </div>
+    <div class="group">
+      <input id="search" type="search" placeholder="Search by id or type…" aria-label="Search">
+      <button id="clearSearch" type="button" aria-label="Clear search">✕</button>
+    </div>
+  </section>
+
+  <main>
+    <div id="tree" class="tree" role="tree"></div>
+  </main>
+
+  <footer class="app-footer">
+    <small>Tip: click “Load default JSON” to load the repo file.</small>
+  </footer>
+</body>
+</html>
+
+
