@@ -5,8 +5,7 @@
   "description": "Simple JSON structure viewer",
   "main": "app.js",
   "scripts": {
-    "start": "serve -l 5173 .",
-    "build": "echo \"No build step for static app\"",
+    "start": "serve -l 5173 ."
   },
   "author": "",
   "license": "ISC",

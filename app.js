@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const DEFAULT_JSON = '632251_271879959b2c9dbf006e4b6bcc3f15a3_1.json';
+  // Default JSON removed: URL-only flow
   const INDENT_UNIT = '    '; // 4 spaces for clearer child indentation
   const INDENT_STEP_PX = 16; // visual indent step in pixels for details offset
   const LEADING_ICON_AREA_PX = 32; // caret + icon + bullet visual width
@@ -9,14 +9,15 @@
   const $ = (sel) => document.querySelector(sel);
   const treeEl = $('#tree');
   const statusEl = $('#status');
-  const fileInput = $('#fileInput');
-  const loadDefaultBtn = $('#loadDefaultBtn');
+  // File input and default button removed: URL-only flow
   const expandAllBtn = $('#expandAll');
   const collapseAllBtn = $('#collapseAll');
   const printStructureBtn = $('#printStructure');
   const printJSONBtn = $('#printJSON');
   const searchInput = $('#search');
   const clearSearchBtn = $('#clearSearch');
+  const urlInput = $('#urlInput');
+  const loadUrlBtn = $('#loadUrlBtn');
 
   function setStatus(message) { statusEl.textContent = message || ''; }
 
@@ -396,50 +397,30 @@
       .replaceAll("'", '&#39;');
   }
 
-  async function loadDefault() {
+  // loadDefault removed
+
+  async function loadFromUrl(url) {
+    const src = String(url || '').trim();
+    if (!src) { setStatus('Enter a valid URL'); return; }
     try {
-      setStatus('Loading default JSON…');
-      const res = await fetch(DEFAULT_JSON);
-      if (!res.ok) throw new Error('Failed to fetch default JSON');
+      setStatus(`Fetching ${src}…`);
+      const res = await fetch(src, { mode: 'cors' });
+      if (!res.ok) throw new Error(`Failed to fetch: ${res.status} ${res.statusText}`);
       const data = await res.json();
       currentFullJSON = data;
       const root = normalizeRoot(data);
       renderTree(root);
-      setStatus(`Loaded: ${DEFAULT_JSON}`);
+      setStatus(`Loaded from URL: ${src}`);
     } catch (e) {
-      setStatus(e.message);
+      setStatus(e.message || 'Failed to load from URL');
     }
   }
 
-  function readFile(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.onload = () => {
-        try { resolve(JSON.parse(String(reader.result))); }
-        catch (e) { reject(new Error('Invalid JSON')); }
-      };
-      reader.readAsText(file);
-    });
-  }
+  // File reading removed: URL-only flow
 
-  async function onFilePicked(e) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    try {
-      setStatus(`Reading ${file.name}…`);
-      const data = await readFile(file);
-      currentFullJSON = data;
-      const root = normalizeRoot(data);
-      renderTree(root);
-      setStatus(`Loaded: ${file.name}`);
-    } catch (e) {
-      setStatus(e.message);
-    }
-  }
+  // File input handler removed
 
-  loadDefaultBtn.addEventListener('click', loadDefault);
-  fileInput.addEventListener('change', onFilePicked);
+  // Removed listeners for default and file input
   expandAllBtn.addEventListener('click', () => {
     document.querySelectorAll('#tree details').forEach(d => d.open = true);
   });
@@ -473,6 +454,24 @@
   clearSearchBtn.addEventListener('click', () => { searchInput.value = ''; applySearch(''); });
   searchInput.addEventListener('input', (e) => applySearch(e.target.value));
 
+  if (loadUrlBtn) {
+    loadUrlBtn.addEventListener('click', () => {
+      const nextUrl = urlInput && urlInput.value;
+      if (nextUrl) updateQueryParam('url', nextUrl);
+      loadFromUrl(nextUrl);
+    });
+  }
+  if (urlInput) {
+    urlInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const nextUrl = urlInput.value;
+        if (nextUrl) updateQueryParam('url', nextUrl);
+        loadFromUrl(nextUrl);
+      }
+    });
+  }
+
   function applySearch(query) {
     const q = String(query || '').trim().toLowerCase();
     const nodes = treeEl.querySelectorAll('details, .node');
@@ -498,8 +497,25 @@
     });
   }
 
-  // Auto-load default on first paint
-  window.addEventListener('DOMContentLoaded', loadDefault);
+  function updateQueryParam(key, value) {
+    const url = new URL(window.location.href);
+    if (value === null || value === undefined || value === '') {
+      url.searchParams.delete(key);
+    } else {
+      url.searchParams.set(key, value);
+    }
+    window.history.replaceState({}, '', url);
+  }
+
+  // Auto-load: only via ?url=
+  window.addEventListener('DOMContentLoaded', () => {
+    const params = new URLSearchParams(window.location.search);
+    const url = params.get('url');
+    if (url) {
+      if (urlInput) urlInput.value = url;
+      loadFromUrl(url);
+    }
+  });
 })();
 
 

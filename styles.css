@@ -44,6 +44,14 @@ body {
     background: color-mix(in hsl, var(--panel), transparent 50%);
 }
 
+.controls input[type="url"] {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    color: var(--text);
+}
+
 .toolbar {
     display: flex;
     justify-content: space-between;

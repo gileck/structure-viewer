@@ -18,11 +18,8 @@
   </header>
 
   <section class="controls">
-    <label class="file-input">
-      <span>Select JSON file</span>
-      <input id="fileInput" type="file" accept="application/json">
-    </label>
-    <button id="loadDefaultBtn" type="button">Load default JSON</button>
+    <input id="urlInput" type="url" placeholder="https://pages.parastorage.com/sites/a806fd_9e2ff06151a938fec0f173ee4a91aebe_10.json.z?v=3" aria-label="JSON URL" style="min-width: 320px;">
+    <button id="loadUrlBtn" type="button">Load from URL</button>
     <span id="status" class="status" aria-live="polite"></span>
   </section>
 
@@ -44,7 +41,7 @@
   </main>
 
   <footer class="app-footer">
-    <small>Tip: click “Load default JSON” to load the repo file.</small>
+    <small>Tip: paste a JSON URL above or open with <code>?url=…</code>.</small>
   </footer>
 </body>
 </html>

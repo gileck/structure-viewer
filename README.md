@@ -25,9 +25,13 @@ Then open the URL shown in the terminal (usually `http://localhost:5173`).
 - `index.html` — App entry HTML
 - `app.js` — Main UI logic rendering the JSON structure
 - `styles.css` — Styles for the tree and controls
-- `632251_*.json` — Example JSON used by the app
 
 ### Usage notes
-- Use the "Load default JSON" button to load the included example.
-- You can also upload your own JSON using the file picker.
 - Opening `index.html` directly from the filesystem won't work due to browser restrictions on `fetch` for `file://` URLs. Use `yarn start` instead.
+
+### Load from URL (only)
+- Paste a JSON URL in the "Load from URL" field and click the button (or press Enter). The URL is saved to the page's `?url=` query param.
+- You can open the app directly with a JSON URL: `?url=https://example.com/your.json`.
+- Notes:
+  - The URL must be publicly accessible and return valid JSON with appropriate CORS headers if hosted on a different origin.
+  - The viewer accepts either a root object that already represents the structure, or an object with a `structure` key. In the latter case, the value of `structure` is used as the tree root.
