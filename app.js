@@ -34,18 +34,23 @@
     return { id, type };
   }
 
-  function createLeaf(node, depth) {
-    return createObjectViewer(node, depth, false);
+  function createLeaf(node, depth, path) {
+    return createObjectViewer(node, depth, false, path);
   }
 
-  function createBranch(node, depth) {
-    return createObjectViewer(node, depth, true);
+  function createBranch(node, depth, path) {
+    return createObjectViewer(node, depth, true, path);
   }
 
-  function createObjectViewer(node, depth, hasNestedChildren) {
+  function createObjectViewer(node, depth, hasNestedChildren, path) {
     const { id, type } = getNodeLabel(node);
     const details = document.createElement('details');
     const summary = document.createElement('summary');
+    if (path !== undefined) {
+      details.setAttribute('data-path', String(path));
+    }
+    // Keep a handle to the structure section so we can insert children before it
+    let structureDetailsEl = null;
     
     const indent = document.createElement('span');
     indent.className = 'indent';
@@ -126,17 +131,28 @@
     
     // Add children directly to the details element (not in a separate section)
     if (children.length > 0) {
-      // Sort children by their total descendant count (most to least)
-      const sortedChildren = children.slice().sort((a, b) => {
-        const aCount = getDescendantCount(a);
-        const bCount = getDescendantCount(b);
-        return bCount - aCount;
+      // Lazy hydrate children on first open
+      const sortedChildren = getSortedChildren(node);
+      const hydrate = () => {
+        if (details.dataset.hydrated === '1') return;
+        for (let i = 0; i < sortedChildren.length; i++) {
+          const child = sortedChildren[i];
+          const hasGrandChildren = hasChildren(child);
+          const childPath = path ? `${path}/${i}` : String(i);
+          const childEl = hasGrandChildren ? createBranch(child, depth + 1, childPath) : createLeaf(child, depth + 1, childPath);
+          if (structureDetailsEl) details.insertBefore(childEl, structureDetailsEl); else details.appendChild(childEl);
+        }
+        details.dataset.hydrated = '1';
+      };
+      details.__hydrate = hydrate;
+      details.addEventListener('toggle', () => {
+        if (details.open) {
+          hydrate();
+        } else {
+          pruneChildren(details);
+          details.dataset.hydrated = '0';
+        }
       });
-      
-      for (const child of sortedChildren) {
-        const hasGrandChildren = hasChildren(child);
-        details.appendChild(hasGrandChildren ? createBranch(child, depth + 1) : createLeaf(child, depth + 1));
-      }
     }
     
     // Structure section (all other properties) - only if there are non-children properties
@@ -257,6 +273,7 @@
       
       structureDetails.appendChild(structureContainer);
       details.appendChild(structureDetails);
+      structureDetailsEl = structureDetails;
     }
     
     return details;
@@ -266,6 +283,21 @@
     const c1 = Array.isArray(node.children) && node.children.length > 0;
     const c2 = Array.isArray(node.components) && node.components.length > 0;
     return c1 || c2;
+  }
+
+  function getSortedChildren(node) {
+    const children = getChildren(node);
+    return children.slice().sort((a, b) => {
+      const aCount = getDescendantCount(a);
+      const bCount = getDescendantCount(b);
+      return bCount - aCount;
+    });
+  }
+
+  function pruneChildren(detailsEl) {
+    if (!detailsEl) return;
+    const childrenNodes = detailsEl.querySelectorAll(':scope > details[data-path]');
+    childrenNodes.forEach((child) => child.remove());
   }
 
   function getChildren(node) {
@@ -376,6 +408,7 @@
     };
   }
 
+  let rootDetails = null;
   function renderTree(root) {
     treeEl.innerHTML = '';
     if (!root) {
@@ -383,9 +416,11 @@
       return;
     }
     currentRoot = root;
-    const branch = createBranch(root, 0);
-    branch.open = true;
+    const branch = createBranch(root, 0, 'root');
     treeEl.appendChild(branch);
+    rootDetails = branch;
+    // Open root to show first level (and hydrate it)
+    branch.open = true;
   }
 
   function escapeHtml(str) {
@@ -474,27 +509,58 @@
 
   function applySearch(query) {
     const q = String(query || '').trim().toLowerCase();
-    const nodes = treeEl.querySelectorAll('details, .node');
+    // Reset selections
+    treeEl.querySelectorAll('details').forEach(n => n.classList.remove('selected'));
     if (!q) {
-      nodes.forEach(n => n.classList.remove('selected'));
-      nodes.forEach(n => n.style.display = '');
+      // Collapse everything to root for URL-only visible DOM
+      treeEl.querySelectorAll('details').forEach(d => { if (d !== rootDetails) { d.open = false; pruneChildren(d); d.dataset.hydrated = '0'; } });
+      if (rootDetails) { rootDetails.open = true; }
       return;
     }
-    nodes.forEach(n => {
-      const label = n.querySelector('.label');
-      const meta = n.querySelector('.meta');
-      const hay = `${label ? label.textContent : ''} ${meta ? meta.textContent : ''}`.toLowerCase();
-      const match = hay.includes(q);
-      n.style.display = match ? '' : 'none';
-      if (match) n.classList.add('selected'); else n.classList.remove('selected');
-    });
-    // Open all parents to reveal matches
-    treeEl.querySelectorAll('details').forEach(d => {
-      const anyVisible = d.querySelector(':scope > .children, :scope > summary');
-      if (!anyVisible) return;
-      const visible = d.querySelectorAll(':scope .node, :scope details').length !== d.querySelectorAll(':scope .node[style*="display: none"], :scope details[style*="display: none"]').length;
-      if (visible) d.open = true;
-    });
+    const matchPaths = findMatchingPaths(q);
+    // Collapse to root first
+    treeEl.querySelectorAll('details').forEach(d => { if (d !== rootDetails) { d.open = false; pruneChildren(d); d.dataset.hydrated = '0'; } });
+    if (!rootDetails) return;
+    rootDetails.open = true;
+    for (const path of matchPaths) {
+      openPath(path);
+      const nodeEl = document.querySelector(`details[data-path="${path}"]`);
+      if (nodeEl) nodeEl.classList.add('selected');
+    }
+  }
+
+  function findMatchingPaths(q) {
+    if (!currentRoot) return [];
+    const results = [];
+    function walk(node, path) {
+      const { id, type } = getNodeLabel(node);
+      const hay = `${id || ''} ${type || ''}`.toLowerCase();
+      if (hay.includes(q)) results.push(path);
+      const children = getChildren(node);
+      for (let i = 0; i < children.length; i++) {
+        walk(children[i], `${path}/${i}`);
+      }
+    }
+    walk(currentRoot, 'root');
+    return results;
+  }
+
+  function openPath(path) {
+    if (!rootDetails) return;
+    const parts = path.split('/').slice(1); // remove 'root'
+    let currentPath = 'root';
+    let currentEl = rootDetails;
+    for (const seg of parts) {
+      if (!currentEl.open) currentEl.open = true;
+      if (typeof currentEl.__hydrate === 'function' && currentEl.dataset.hydrated !== '1') {
+        currentEl.__hydrate();
+      }
+      currentPath = `${currentPath}/${seg}`;
+      const nextEl = document.querySelector(`details[data-path="${currentPath}"]`);
+      if (!nextEl) break;
+      currentEl = nextEl;
+    }
+    if (currentEl && !currentEl.open) currentEl.open = true;
   }
 
   function updateQueryParam(key, value) {

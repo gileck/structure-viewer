@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Structure Viewer • Site Loader</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="site.js"></script>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Load site models and open page JSONs in the structure viewer">
+</head>
+<body>
+  <header class="app-header">
+    <h1>Site Loader</h1>
+    <p class="subtitle">Enter a site URL to fetch its pages</p>
+  </header>
+
+  <section class="controls">
+    <input id="siteInput" type="url" placeholder="https://example.com" aria-label="Site URL" style="min-width: 320px;">
+    <button id="loadSiteBtn" type="button">Load site pages</button>
+    <span id="siteStatus" class="status" aria-live="polite"></span>
+  </section>
+
+  <main style="padding: 16px 20px 32px;">
+    <div id="pagesContainer"></div>
+  </main>
+
+  <footer class="app-footer">
+    <small>
+      Tip: open a page in the structure viewer; it uses <code>/?url=https://pages.parastorage.com/sites/{pageJsonFileName}</code>.
+      <a href="index.html">Go to viewer</a>
+    </small>
+  </footer>
+</body>
+</html>
+
+
