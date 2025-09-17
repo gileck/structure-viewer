@@ -89,6 +89,8 @@ export default function Viewer() {
   const [root, setRoot] = useState<AnyRecord | null>(null)
   const [fullJSON, setFullJSON] = useState<AnyRecord | null>(null)
   const [jsonUrl, setJsonUrl] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [jsonSizeBytes, setJsonSizeBytes] = useState<number | null>(null)
 
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -126,12 +128,18 @@ export default function Viewer() {
 
   const fetchJSON = useCallback(async (url: string) => {
     setStatus('Fetching JSON…')
+    setIsLoading(true)
     const res = await fetch(`/api/page-json?url=${encodeURIComponent(url)}`)
     if (!res.ok) throw new Error(`Failed: ${res.status}`)
     const data = await res.json()
+    try {
+      const size = new TextEncoder().encode(JSON.stringify(data)).length
+      setJsonSizeBytes(size)
+    } catch {}
     setFullJSON(data)
     setRoot(normalizeRoot(data))
     setStatus('Loaded')
+    setIsLoading(false)
   }, [])
 
   useEffect(() => {
@@ -155,15 +163,28 @@ export default function Viewer() {
         <header className="mb-4">
           <h1 className="text-2xl font-semibold tracking-tight">Structure Viewer</h1>
           <p className="text-sm text-[color:var(--muted)]">View your JSON structure as a nested tree · <Link href="/site" className="text-blue-600 hover:underline">Load a site</Link></p>
-          <p className="text-sm text-[color:var(--muted)]" aria-live="polite">{status}</p>
+          <p className="text-sm text-[color:var(--muted)]" aria-live="polite">{isLoading ? 'Loading…' : status}</p>
           {jsonUrl ? (
             <p className="text-sm text-[color:var(--muted)]">
-              Current JSON: <a href={jsonUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Open in new tab</a>
+              {(() => {
+                let id = ''
+                try { const u = new URL(jsonUrl!); id = (u.pathname.split('/').pop() || '') } catch {}
+                const sizeText = jsonSizeBytes != null ? ` (${formatBytes(jsonSizeBytes)})` : ''
+                return (
+                  <>
+                    {'Current JSON: '}
+                    <a href={jsonUrl!} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{id || jsonUrl}</a>
+                    {sizeText}
+                  </>
+                )
+              })()}
             </p>
           ) : null}
         </header>
         <main ref={containerRef} className="rounded-xl border border-[color:var(--border)] bg-white/70 backdrop-blur p-4 shadow-sm">
-          {root ? (
+          {isLoading ? (
+            <div className="text-[color:var(--muted)]">Loading data…</div>
+          ) : root ? (
             <TreeRoot data={root} resolveQueryValue={resolveQueryValue} />
           ) : (
             <div className="text-[color:var(--muted)]">No JSON loaded. Pass ?url=…</div>
@@ -582,5 +603,15 @@ function ChildrenHydrator({ parentRef, node, path, depth, resolveQueryValue }: {
   }, [parentRef, hydrate, pruneChildren])
 
   return null
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes)) return ''
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let n = bytes
+  while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
+  const value = i === 0 ? Math.round(n) : Math.round(n * 10) / 10
+  return `${value}${units[i]}`
 }
 

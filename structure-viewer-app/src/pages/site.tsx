@@ -51,6 +51,19 @@ export default function Site() {
     }
   }, [])
 
+  const clearSite = useCallback(() => {
+    setSiteUrl('')
+    setPages([])
+    setMasterFileName(null)
+    setStatus('')
+    setSearch('')
+    try {
+      const urlObj = new URL(window.location.href)
+      urlObj.searchParams.delete('site')
+      window.history.replaceState({}, '', urlObj)
+    } catch {}
+  }, [])
+
   useEffect(() => {
     const initialSite = query.get('site')
     if (initialSite) {
@@ -86,51 +99,44 @@ export default function Site() {
         <header className="mb-4">
           <h1 className="text-2xl font-semibold tracking-tight">Site Loader</h1>
           <p className="text-sm text-[color:var(--muted)]">Enter a site URL to fetch its pages</p>
-          <div className="mt-2 text-sm">
-            <Link href="/" className="text-blue-600 hover:underline">Go to viewer</Link>
-          </div>
         </header>
 
         <section className="rounded-xl border border-[color:var(--border)] bg-white/70 backdrop-blur p-4 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              value={siteUrl}
-              onChange={(e) => setSiteUrl(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') fetchPages(siteUrl) }}
-              placeholder="https://example.com"
-              type="url"
-              aria-label="Site URL"
-              className="w-full min-w-0 rounded-lg border border-[color:var(--border)] bg-white px-3 py-2 text-[color:var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={() => fetchPages(siteUrl)}
-              type="button"
-              className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-white shadow-sm transition hover:bg-blue-500"
-            >
-              Load site pages
-            </button>
-            <span className="text-sm text-[color:var(--muted)]" aria-live="polite">{status}</span>
+            <div className="w-full min-w-0">
+              <input
+                value={siteUrl}
+                onChange={(e) => setSiteUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') fetchPages(siteUrl) }}
+                placeholder="Wix Site URL"
+                type="url"
+                aria-label="Site URL"
+                className="w-full min-w-0 rounded-lg border border-[color:var(--border)] bg-white px-3 py-2 text-[color:var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={() => fetchPages(siteUrl)}
+                  type="button"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-white shadow-sm transition hover:bg-blue-500"
+                >
+                  Load site pages
+                </button>
+                <button
+                  onClick={clearSite}
+                  type="button"
+                  className="inline-flex items-center justify-center whitespace-nowrap rounded-lg border border-[color:var(--border)] bg-white px-4 py-2 text-[color:var(--text)] shadow-sm transition hover:bg-gray-50"
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="mt-2 text-sm text-[color:var(--muted)]" aria-live="polite">{status}</div>
+            </div>
           </div>
         </section>
 
-        {/* Search visible only when pages are loaded */}
-        {pages.length > 0 ? (
-          <section className="mt-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search pages by title"
-                type="text"
-                aria-label="Search pages"
-                className="w-full min-w-0 rounded-lg border border-[color:var(--border)] bg-white px-3 py-2 text-[color:var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <span className="text-sm text-[color:var(--muted)]">{filteredPages.length} / {pages.length} shown</span>
-            </div>
-          </section>
-        ) : null}
+        {/* Search moved inside the pages container header */}
 
-        {history.length > 0 ? (
+        {history.length > 0 && pages.length === 0 && !masterFileName ? (
           <section className="mt-4 rounded-xl border border-[color:var(--border)] bg-white/70 backdrop-blur p-3 shadow-sm">
             <div className="mb-2 text-sm font-medium text-[color:var(--text)]">History</div>
             <div className="flex flex-wrap gap-2">
@@ -150,10 +156,20 @@ export default function Site() {
         ) : null}
 
         <main className="mt-6">
-          {filteredPages.length === 0 && !masterFileName ? (
-            <div className="text-[color:var(--muted)]">No pages loaded.</div>
-          ) : (
+          {filteredPages.length === 0 && !masterFileName ? (<>  </>) : (
             <div className="overflow-hidden rounded-xl border border-[color:var(--border)] bg-white/80 shadow-sm">
+              {/* Pages header with search */}
+              <div className="flex flex-col gap-3 border-b border-[color:var(--border)] p-3 sm:flex-row sm:items-center">
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search pages by title"
+                  type="text"
+                  aria-label="Search pages"
+                  className="w-full min-w-0 rounded-lg border border-[color:var(--border)] bg-white px-3 py-2 text-[color:var(--text)] shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm text-[color:var(--muted)]">{filteredPages.length} / {pages.length} shown</span>
+              </div>
               <ul className="divide-y divide-[color:var(--border)]">
                 {masterFileName ? (() => {
                   const jsonUrl = `https://pages.parastorage.com/sites/${masterFileName}`
