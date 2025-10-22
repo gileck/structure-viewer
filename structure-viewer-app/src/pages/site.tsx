@@ -173,7 +173,7 @@ export default function Site() {
               <ul className="divide-y divide-[color:var(--border)]">
                 {masterFileName ? (() => {
                   const jsonUrl = `https://pages.parastorage.com/sites/${masterFileName}`
-                  const href = `/viewer?url=${encodeURIComponent(jsonUrl)}`
+                  const href = `/viewer?url=${encodeURIComponent(jsonUrl)}&site=${encodeURIComponent(siteUrl)}`
                   return (
                     <li key="__master">
                       <Link href={href} className="group flex items-center justify-between px-4 py-3 hover:bg-blue-50">
@@ -190,7 +190,7 @@ export default function Site() {
                 {filteredPages.map((p) => {
                   const fileName = p.pageJsonFileName || ''
                   const jsonUrl = fileName ? `https://pages.parastorage.com/sites/${fileName}` : ''
-                  const href = jsonUrl ? `/viewer?url=${encodeURIComponent(jsonUrl)}` : '#'
+                  const href = jsonUrl ? `/viewer?url=${encodeURIComponent(jsonUrl)}&site=${encodeURIComponent(siteUrl)}` : '#'
                   return (
                     <li key={p.pageId}>
                       <Link href={href} className="group flex items-center justify-between px-4 py-3 hover:bg-blue-50">

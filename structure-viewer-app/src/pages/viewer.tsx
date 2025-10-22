@@ -96,6 +96,7 @@ export default function Viewer() {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const params = useMemo(() => new URLSearchParams(typeof window !== 'undefined' ? window.location.search : ''), [])
+  const siteUrl = params.get('site')
 
   const structureCount = useMemo(() => {
     if (!root) return 0
@@ -171,6 +172,10 @@ export default function Viewer() {
       if (normalized !== url && typeof window !== 'undefined') {
         const loc = new URL(window.location.href)
         loc.searchParams.set('url', normalized)
+        // Preserve the site parameter if it exists
+        if (siteUrl) {
+          loc.searchParams.set('site', siteUrl)
+        }
         window.history.replaceState({}, '', loc)
       }
       setJsonUrl(normalized)
@@ -183,6 +188,16 @@ export default function Viewer() {
     <div className="min-h-screen px-5 py-8">
       <div className="mx-auto w-full max-w-6xl">
         <header className="mb-4">
+          {siteUrl && (
+            <div className="mb-2">
+              <Link 
+                href={`/site?site=${encodeURIComponent(siteUrl)}`}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border border-[color:var(--border)] bg-white text-[color:var(--text)] hover:bg-gray-50 transition"
+              >
+                ← Back to Site
+              </Link>
+            </div>
+          )}
           <h1 className="text-2xl font-semibold tracking-tight">Structure Viewer</h1>
           <p className="text-sm text-[color:var(--muted)]">View your JSON structure as a nested tree · <Link href="/site" className="text-blue-600 hover:underline">Load a site</Link></p>
           <p className="text-sm text-[color:var(--muted)]" aria-live="polite">{isLoading ? 'Loading…' : status}</p>
