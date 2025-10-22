@@ -91,10 +91,32 @@ export default function Viewer() {
   const [jsonUrl, setJsonUrl] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [jsonSizeBytes, setJsonSizeBytes] = useState<number | null>(null)
+  const [activeTab, setActiveTab] = useState<'structure' | 'data'>('structure')
 
   const containerRef = useRef<HTMLDivElement>(null)
 
   const params = useMemo(() => new URLSearchParams(typeof window !== 'undefined' ? window.location.search : ''), [])
+
+  const structureCount = useMemo(() => {
+    if (!root) return 0
+    return getDescendantCount(root) + 1 // +1 for root itself
+  }, [root])
+
+  const dataKeysCount = useMemo(() => {
+    if (!fullJSON?.data || typeof fullJSON.data !== 'object') return 0
+    let total = 0
+    // Count first level keys
+    const firstLevelKeys = Object.keys(fullJSON.data)
+    total += firstLevelKeys.length
+    // Count second level keys
+    for (const key of firstLevelKeys) {
+      const value = fullJSON.data[key]
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        total += Object.keys(value).length
+      }
+    }
+    return total
+  }, [fullJSON])
 
   const resolveQueryValue = useCallback((key: string, value: any) => {
     if (!fullJSON || typeof value !== 'string') return value
@@ -181,17 +203,279 @@ export default function Viewer() {
             </p>
           ) : null}
         </header>
+
+        {/* Tabs */}
+        <div className="mb-4 flex gap-2 border-b border-[color:var(--border)]">
+          <button
+            onClick={() => setActiveTab('structure')}
+            className={`px-4 py-2 font-medium transition flex items-center gap-2 ${
+              activeTab === 'structure'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-[color:var(--muted)] hover:text-[color:var(--text)]'
+            }`}
+          >
+            <span>Structure</span>
+            {structureCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                {structureCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab('data')}
+            className={`px-4 py-2 font-medium transition flex items-center gap-2 ${
+              activeTab === 'data'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-[color:var(--muted)] hover:text-[color:var(--text)]'
+            }`}
+          >
+            <span>Data</span>
+            {dataKeysCount > 0 && (
+              <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">
+                {dataKeysCount}
+              </span>
+            )}
+          </button>
+        </div>
+
         <main ref={containerRef} className="rounded-xl border border-[color:var(--border)] bg-white/70 backdrop-blur p-4 shadow-sm">
           {isLoading ? (
             <div className="text-[color:var(--muted)]">Loading data…</div>
-          ) : root ? (
-            <TreeRoot data={root} resolveQueryValue={resolveQueryValue} />
+          ) : activeTab === 'structure' ? (
+            root ? (
+              <TreeRoot data={root} resolveQueryValue={resolveQueryValue} />
+            ) : (
+              <div className="text-[color:var(--muted)]">No JSON loaded. Pass ?url=…</div>
+            )
           ) : (
-            <div className="text-[color:var(--muted)]">No JSON loaded. Pass ?url=…</div>
+            fullJSON?.data ? (
+              <DataView data={fullJSON.data} />
+            ) : (
+              <div className="text-[color:var(--muted)]">No data found in JSON</div>
+            )
           )}
         </main>
       </div>
     </div>
+  )
+}
+
+function DataView({ data }: { data: AnyRecord }) {
+  const [sortBy, setSortBy] = useState<'count' | 'size'>('count')
+
+  const dataEntries = useMemo(() => {
+    if (!data || typeof data !== 'object') return []
+    return Object.entries(data).map(([key, value]) => {
+      let count = 0
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        count = Object.keys(value).length
+      } else if (Array.isArray(value)) {
+        count = value.length
+      }
+      const size = estimateSize(value)
+      return { key, count, type: Array.isArray(value) ? 'array' : typeof value, value, size }
+    }).sort((a, b) => {
+      if (sortBy === 'size') {
+        return b.size - a.size
+      }
+      return b.count - a.count
+    })
+  }, [data, sortBy])
+
+  const totalSize = useMemo(() => {
+    return dataEntries.reduce((sum, entry) => sum + entry.size, 0)
+  }, [dataEntries])
+
+  return (
+    <div>
+      <div className="mb-3 pb-2 border-b border-[color:var(--border)] flex items-center justify-between">
+        <span className="text-sm text-[color:var(--muted)] italic">
+          Total estimated size: <span className="font-semibold text-[color:var(--text)]">{formatBytes(totalSize)}</span>
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[color:var(--muted)]">Sort by:</span>
+          <button
+            onClick={() => setSortBy('count')}
+            className={`text-xs px-3 py-1 rounded transition ${
+              sortBy === 'count'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Count
+          </button>
+          <button
+            onClick={() => setSortBy('size')}
+            className={`text-xs px-3 py-1 rounded transition ${
+              sortBy === 'size'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Size
+          </button>
+        </div>
+      </div>
+      {dataEntries.map(({ key, count, type, value, size }) => (
+        <DataEntry key={key} entryKey={key} count={count} type={type} value={value} data={data} size={size} />
+      ))}
+    </div>
+  )
+}
+
+function DataEntry({ entryKey, count, type, value, data, size }: { 
+  entryKey: string, 
+  count: number, 
+  type: string, 
+  value: any,
+  data: AnyRecord,
+  size: number
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [showCount, setShowCount] = useState(10)
+  const [expandedNestedKey, setExpandedNestedKey] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const nestedEntries = useMemo(() => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+    return Object.entries(value)
+  }, [value])
+
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery.trim()) return nestedEntries
+    const query = searchQuery.toLowerCase()
+    return nestedEntries.filter(([key]) => key.toLowerCase().includes(query))
+  }, [nestedEntries, searchQuery])
+
+  const visibleEntries = filteredEntries.slice(0, showCount)
+  const hasMore = showCount < filteredEntries.length
+
+  return (
+    <details className="group" open={isExpanded} onToggle={(e) => setIsExpanded(e.currentTarget.open)}>
+      <summary className="list-none cursor-pointer hover:bg-blue-50/50 transition-colors py-2 px-1">
+        <div className="flex items-center gap-2">
+          <span className="caret text-sm">{isExpanded ? '▸' : '▸'}</span>
+          <span className={`icon ${type === 'object' ? 'folder' : 'file'}`}></span>
+          <div className="flex-1 flex items-center gap-3">
+            <span className="font-mono text-sm font-medium text-[color:var(--text)]">{entryKey}</span>
+            <div className="flex items-center gap-2">
+              {count > 0 && (
+                <span className="badge text-[10px] px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium" title={`${count} ${type === 'array' ? 'items' : 'keys'}`}>
+                  {count}
+                </span>
+              )}
+              {size > 0 && (
+                <span className="text-xs text-[color:var(--muted)] font-medium" title={`Estimated size: ${size} bytes`}>
+                  {formatBytes(size)}
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.clear(); console.log(entryKey, data[entryKey]); }}
+            className="print-btn opacity-0 group-hover:opacity-100 text-base"
+            title={`Print ${entryKey} to console`}
+          >
+            🖨️
+          </button>
+        </div>
+      </summary>
+      
+      {isExpanded && nestedEntries.length > 0 && (
+        <div className="ml-8 mt-1 mb-2">
+          <div className="mb-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setShowCount(10); }}
+              placeholder="Search nested keys..."
+              className="w-full px-3 py-1.5 text-xs rounded border border-[color:var(--border)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <div className="mb-2 text-xs text-[color:var(--muted)] italic">
+            Showing {visibleEntries.length} from {filteredEntries.length}{searchQuery ? ` (filtered from ${nestedEntries.length} total)` : ''}
+          </div>
+          <div className="space-y-0.5">
+            {visibleEntries.map(([nestedKey, nestedValue]) => {
+              const itemType = nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) 
+                ? (nestedValue as AnyRecord).type || (nestedValue as AnyRecord).componentType || typeof nestedValue
+                : Array.isArray(nestedValue) ? `[Array(${nestedValue.length})]` : typeof nestedValue
+              const isNestedExpanded = expandedNestedKey === nestedKey
+              const nestedSize = estimateSize(nestedValue)
+              return (
+                <details 
+                  key={nestedKey}
+                  className="group/nested"
+                  open={isNestedExpanded}
+                  onToggle={(e) => setExpandedNestedKey(e.currentTarget.open ? nestedKey : null)}
+                >
+                  <summary className="list-none cursor-pointer hover:bg-blue-50/50 transition-colors py-1.5 px-2 rounded">
+                    <div className="flex items-center gap-2">
+                      <span className="caret text-sm">{isNestedExpanded ? '▸' : '▸'}</span>
+                      <span className="icon file"></span>
+                      <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-sm text-[color:var(--text)] truncate">{nestedKey}</div>
+                          <div className="text-xs text-gray-500 truncate">
+                            {itemType}
+                          </div>
+                        </div>
+                        {nestedSize > 0 && (
+                          <span className="text-[10px] text-[color:var(--muted)] font-medium whitespace-nowrap" title={`Estimated size: ${nestedSize} bytes`}>
+                            {formatBytes(nestedSize)}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.clear(); console.log(nestedKey, nestedValue); }}
+                        className="print-btn opacity-0 group-hover/nested:opacity-100 text-base"
+                        title={`Print ${nestedKey} to console`}
+                      >
+                        🖨️
+                      </button>
+                    </div>
+                  </summary>
+                  {isNestedExpanded && (
+                    <div className="ml-8 mt-1 mb-2">
+                      <pre className="text-xs overflow-x-auto bg-[#f8f9fa] p-3 rounded border border-[color:var(--border)] max-h-96 overflow-y-auto font-mono leading-relaxed">
+                        {JSON.stringify(nestedValue, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </details>
+              )
+            })}
+          </div>
+          {filteredEntries.length > 10 && (
+            <div className="mt-2 flex gap-2">
+              {hasMore ? (
+                <>
+                  <button
+                    onClick={(e) => { e.preventDefault(); setShowCount(prev => prev + 10); }}
+                    className="flex-1 px-2 py-1.5 text-xs rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition font-medium"
+                  >
+                    Load more ({filteredEntries.length - showCount} remaining)
+                  </button>
+                  <button
+                    onClick={(e) => { e.preventDefault(); setShowCount(filteredEntries.length); }}
+                    className="px-3 py-1.5 text-xs rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition font-medium"
+                  >
+                    Show All
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={(e) => { e.preventDefault(); setShowCount(10); }}
+                  className="w-full px-2 py-1.5 text-xs rounded bg-gray-100 text-gray-600 hover:bg-gray-200 transition font-medium"
+                >
+                  Hide All
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </details>
   )
 }
 
@@ -613,5 +897,13 @@ function formatBytes(bytes: number): string {
   while (n >= 1024 && i < units.length - 1) { n /= 1024; i++ }
   const value = i === 0 ? Math.round(n) : Math.round(n * 10) / 10
   return `${value}${units[i]}`
+}
+
+function estimateSize(value: any): number {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).length
+  } catch {
+    return 0
+  }
 }
 
