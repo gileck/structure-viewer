@@ -524,11 +524,42 @@ function DataEntry({ entryKey, count, type, value, data, size, referencedIds, sh
   const [showCount, setShowCount] = useState(10)
   const [expandedNestedKey, setExpandedNestedKey] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [groupByType, setGroupByType] = useState(false)
+  const [expandedTypeGroups, setExpandedTypeGroups] = useState<Set<string>>(new Set())
 
   const nestedEntries = useMemo(() => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return []
     return Object.entries(value)
   }, [value])
+
+  // Group entries by type
+  const groupedByType = useMemo(() => {
+    const groups: Record<string, Array<{ key: string; value: any; size: number; isOrphan: boolean }>> = {}
+    
+    for (const [itemKey, itemValue] of nestedEntries) {
+      const itemType = itemValue && typeof itemValue === 'object' && !Array.isArray(itemValue)
+        ? ((itemValue as AnyRecord).type || (itemValue as AnyRecord).componentType || '(no type)')
+        : Array.isArray(itemValue) ? 'Array' : typeof itemValue
+      
+      if (!groups[itemType]) {
+        groups[itemType] = []
+      }
+      
+      const itemSize = estimateSize(itemValue)
+      const isOrphan = referencedIds ? !referencedIds.has(itemKey) : false
+      groups[itemType].push({ key: itemKey, value: itemValue, size: itemSize, isOrphan })
+    }
+
+    // Sort groups by count descending, sort items within groups by size descending
+    return Object.entries(groups)
+      .map(([typeName, items]) => ({
+        typeName,
+        items: items.sort((a, b) => b.size - a.size),
+        totalSize: items.reduce((sum, item) => sum + item.size, 0),
+        orphanCount: items.filter(i => i.isOrphan).length
+      }))
+      .sort((a, b) => b.items.length - a.items.length)
+  }, [nestedEntries, referencedIds])
 
   // Calculate orphan stats for this data map
   const orphanStats = useMemo(() => {
@@ -605,76 +636,195 @@ function DataEntry({ entryKey, count, type, value, data, size, referencedIds, sh
       
       {isExpanded && nestedEntries.length > 0 && (
         <div className="ml-8 mt-1 mb-2">
-          <div className="mb-2">
+          <div className="mb-2 flex gap-2">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setShowCount(10); }}
               placeholder="Search nested keys..."
-              className="w-full px-3 py-1.5 text-xs rounded border border-[color:var(--border)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="flex-1 px-3 py-1.5 text-xs rounded border border-[color:var(--border)] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+            <button
+              onClick={(e) => { e.preventDefault(); setGroupByType(!groupByType); }}
+              className={`px-3 py-1.5 text-xs font-medium rounded transition-colors whitespace-nowrap ${
+                groupByType 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white border border-[color:var(--border)] text-[color:var(--text)] hover:bg-gray-100'
+              }`}
+            >
+              Group by Type
+            </button>
           </div>
           <div className="mb-2 text-xs text-[color:var(--muted)] italic">
-            Showing {visibleEntries.length} from {filteredEntries.length}{searchQuery ? ` (filtered from ${nestedEntries.length} total)` : ''}
+            {groupByType 
+              ? `${groupedByType.length} types, ${nestedEntries.length} total items`
+              : `Showing ${visibleEntries.length} from ${filteredEntries.length}${searchQuery ? ` (filtered from ${nestedEntries.length} total)` : ''}`
+            }
           </div>
-          <div className="space-y-0.5">
-            {visibleEntries.map(([nestedKey, nestedValue]) => {
-              const itemType = nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) 
-                ? (nestedValue as AnyRecord).type || (nestedValue as AnyRecord).componentType || typeof nestedValue
-                : Array.isArray(nestedValue) ? `[Array(${nestedValue.length})]` : typeof nestedValue
-              const isNestedExpanded = expandedNestedKey === nestedKey
-              const nestedSize = estimateSize(nestedValue)
-              const isOrphan = referencedIds ? !referencedIds.has(nestedKey) : false
-              return (
-                <details 
-                  key={nestedKey}
-                  className={`group/nested ${isOrphan ? 'bg-red-50 rounded' : ''}`}
-                  open={isNestedExpanded}
-                  onToggle={(e) => setExpandedNestedKey(e.currentTarget.open ? nestedKey : null)}
-                >
-                  <summary className="list-none cursor-pointer hover:bg-blue-50/50 transition-colors py-1.5 px-2 rounded">
-                    <div className="flex items-center gap-2">
-                      <span className="caret text-sm">{isNestedExpanded ? '▸' : '▸'}</span>
-                      <span className="icon file"></span>
-                      <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="font-mono text-sm text-[color:var(--text)] truncate flex items-center gap-2">
-                            {nestedKey}
-                            {isOrphan && (
-                              <span className="text-[9px] px-1 py-0.5 rounded bg-red-500 text-white font-medium">ORPHAN</span>
-                            )}
-                          </div>
-                          <div className="text-xs text-gray-500 truncate">
-                            {itemType}
-                          </div>
-                        </div>
-                        {nestedSize > 0 && (
-                          <span className="text-[10px] text-[color:var(--muted)] font-medium whitespace-nowrap" title={`Estimated size: ${nestedSize} bytes`}>
-                            {formatBytes(nestedSize)}
+          {groupByType ? (
+            /* Grouped by Type View */
+            <div className="space-y-1">
+              {groupedByType
+                .filter(group => !searchQuery.trim() || group.typeName.toLowerCase().includes(searchQuery.toLowerCase()) || group.items.some(i => i.key.toLowerCase().includes(searchQuery.toLowerCase())))
+                .map(group => {
+                  const isTypeExpanded = expandedTypeGroups.has(group.typeName)
+                  const filteredItems = searchQuery.trim() 
+                    ? group.items.filter(i => i.key.toLowerCase().includes(searchQuery.toLowerCase()) || group.typeName.toLowerCase().includes(searchQuery.toLowerCase()))
+                    : group.items
+                  
+                  return (
+                    <details
+                      key={group.typeName}
+                      className="border border-[color:var(--border)] rounded-lg overflow-hidden"
+                      open={isTypeExpanded}
+                      onToggle={(e) => {
+                        if (e.target === e.currentTarget) {
+                          setExpandedTypeGroups(prev => {
+                            const next = new Set(prev)
+                            if (e.currentTarget.open) next.add(group.typeName)
+                            else next.delete(group.typeName)
+                            return next
+                          })
+                        }
+                      }}
+                    >
+                      <summary className="list-none cursor-pointer hover:bg-purple-50/50 transition-colors py-2 px-3 bg-gray-50">
+                        <div className="flex items-center gap-2">
+                          <span className="caret text-sm text-[color:var(--muted)]">{isTypeExpanded ? '▾' : '▸'}</span>
+                          <span className="w-3 h-3 rounded-sm bg-purple-500 shrink-0" />
+                          <span className="font-medium text-sm text-[color:var(--text)]">{group.typeName}</span>
+                          <span className="px-2 py-0.5 text-[10px] rounded-full bg-purple-100 text-purple-700 font-medium">
+                            {filteredItems.length} {filteredItems.length === 1 ? 'item' : 'items'}
                           </span>
-                        )}
+                          {group.orphanCount > 0 && (
+                            <span className="px-2 py-0.5 text-[10px] rounded-full bg-red-100 text-red-700 font-medium">
+                              🗑️ {group.orphanCount}
+                            </span>
+                          )}
+                          <span className="text-xs text-[color:var(--muted)] ml-auto">{formatBytes(group.totalSize)}</span>
+                        </div>
+                      </summary>
+                      {isTypeExpanded && (
+                        <div className="bg-white divide-y divide-[color:var(--border)]">
+                          {filteredItems.slice(0, 50).map(item => {
+                            const isItemExpanded = expandedNestedKey === item.key
+                            return (
+                              <details
+                                key={item.key}
+                                className={`group/nested ${item.isOrphan ? 'bg-red-50' : ''}`}
+                                open={isItemExpanded}
+                                onToggle={(e) => {
+                                  if (e.target === e.currentTarget) {
+                                    setExpandedNestedKey(e.currentTarget.open ? item.key : null)
+                                  }
+                                }}
+                              >
+                                <summary className="list-none cursor-pointer hover:bg-blue-50/50 transition-colors py-1.5 px-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className="caret text-xs text-[color:var(--muted)]">{isItemExpanded ? '▾' : '▸'}</span>
+                                    <span className="icon file shrink-0"></span>
+                                    <span className="font-mono text-sm text-[color:var(--text)] truncate flex-1">
+                                      {item.key}
+                                      {item.isOrphan && (
+                                        <span className="ml-2 text-[9px] px-1 py-0.5 rounded bg-red-500 text-white font-medium">ORPHAN</span>
+                                      )}
+                                    </span>
+                                    <span className="text-[10px] text-[color:var(--muted)] whitespace-nowrap">{formatBytes(item.size)}</span>
+                                    <button
+                                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.clear(); console.log(item.key, item.value); }}
+                                      className="print-btn opacity-0 group-hover/nested:opacity-100 text-base"
+                                      title={`Print ${item.key} to console`}
+                                    >
+                                      🖨️
+                                    </button>
+                                  </div>
+                                </summary>
+                                {isItemExpanded && (
+                                  <div className="ml-8 mt-1 mb-2 mr-4">
+                                    <pre className="text-xs overflow-x-auto bg-[#f8f9fa] p-3 rounded border border-[color:var(--border)] max-h-96 overflow-y-auto font-mono leading-relaxed">
+                                      {JSON.stringify(item.value, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                              </details>
+                            )
+                          })}
+                          {filteredItems.length > 50 && (
+                            <div className="px-4 py-2 text-xs text-[color:var(--muted)] italic bg-gray-50">
+                              Showing 50 of {filteredItems.length} items
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </details>
+                  )
+                })}
+            </div>
+          ) : (
+            /* Flat List View */
+            <div className="space-y-0.5">
+              {visibleEntries.map(([nestedKey, nestedValue]) => {
+                const itemType = nestedValue && typeof nestedValue === 'object' && !Array.isArray(nestedValue) 
+                  ? (nestedValue as AnyRecord).type || (nestedValue as AnyRecord).componentType || typeof nestedValue
+                  : Array.isArray(nestedValue) ? `[Array(${nestedValue.length})]` : typeof nestedValue
+                const isNestedExpanded = expandedNestedKey === nestedKey
+                const nestedSize = estimateSize(nestedValue)
+                const isOrphan = referencedIds ? !referencedIds.has(nestedKey) : false
+                return (
+                  <details 
+                    key={nestedKey}
+                    className={`group/nested ${isOrphan ? 'bg-red-50 rounded' : ''}`}
+                    open={isNestedExpanded}
+                    onToggle={(e) => {
+                      if (e.target === e.currentTarget) {
+                        setExpandedNestedKey(e.currentTarget.open ? nestedKey : null)
+                      }
+                    }}
+                  >
+                    <summary className="list-none cursor-pointer hover:bg-blue-50/50 transition-colors py-1.5 px-2 rounded">
+                      <div className="flex items-center gap-2">
+                        <span className="caret text-sm">{isNestedExpanded ? '▸' : '▸'}</span>
+                        <span className="icon file"></span>
+                        <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-mono text-sm text-[color:var(--text)] truncate flex items-center gap-2">
+                              {nestedKey}
+                              {isOrphan && (
+                                <span className="text-[9px] px-1 py-0.5 rounded bg-red-500 text-white font-medium">ORPHAN</span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {itemType}
+                            </div>
+                          </div>
+                          {nestedSize > 0 && (
+                            <span className="text-[10px] text-[color:var(--muted)] font-medium whitespace-nowrap" title={`Estimated size: ${nestedSize} bytes`}>
+                              {formatBytes(nestedSize)}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.clear(); console.log(nestedKey, nestedValue); }}
+                          className="print-btn opacity-0 group-hover/nested:opacity-100 text-base"
+                          title={`Print ${nestedKey} to console`}
+                        >
+                          🖨️
+                        </button>
                       </div>
-                      <button
-                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); console.clear(); console.log(nestedKey, nestedValue); }}
-                        className="print-btn opacity-0 group-hover/nested:opacity-100 text-base"
-                        title={`Print ${nestedKey} to console`}
-                      >
-                        🖨️
-                      </button>
-                    </div>
-                  </summary>
-                  {isNestedExpanded && (
-                    <div className="ml-8 mt-1 mb-2">
-                      <pre className="text-xs overflow-x-auto bg-[#f8f9fa] p-3 rounded border border-[color:var(--border)] max-h-96 overflow-y-auto font-mono leading-relaxed">
-                        {JSON.stringify(nestedValue, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </details>
-              )
-            })}
-          </div>
-          {filteredEntries.length > 10 && (
+                    </summary>
+                    {isNestedExpanded && (
+                      <div className="ml-8 mt-1 mb-2">
+                        <pre className="text-xs overflow-x-auto bg-[#f8f9fa] p-3 rounded border border-[color:var(--border)] max-h-96 overflow-y-auto font-mono leading-relaxed">
+                          {JSON.stringify(nestedValue, null, 2)}
+                        </pre>
+                      </div>
+                    )}
+                  </details>
+                )
+              })}
+            </div>
+          )}
+          {!groupByType && filteredEntries.length > 10 && (
             <div className="mt-2 flex gap-2">
               {hasMore ? (
                 <>
