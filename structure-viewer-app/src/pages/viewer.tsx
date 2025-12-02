@@ -596,7 +596,7 @@ function DataEntry({ entryKey, count, type, value, data, size, referencedIds, sh
   const hasMore = showCount < filteredEntries.length
 
   return (
-    <details className="group" open={isExpanded} onToggle={(e) => setIsExpanded(e.currentTarget.open)}>
+    <details className="group" open={isExpanded} onToggle={(e) => setIsExpanded(e.currentTarget?.open ?? false)}>
       <summary className="list-none cursor-pointer hover:bg-blue-50/50 transition-colors py-2 px-1">
         <div className="flex items-center gap-2">
           <span className="caret text-sm">{isExpanded ? '▸' : '▸'}</span>
@@ -681,7 +681,7 @@ function DataEntry({ entryKey, count, type, value, data, size, referencedIds, sh
                         if (e.target === e.currentTarget) {
                           setExpandedTypeGroups(prev => {
                             const next = new Set(prev)
-                            if (e.currentTarget.open) next.add(group.typeName)
+                            if (e.currentTarget?.open) next.add(group.typeName)
                             else next.delete(group.typeName)
                             return next
                           })
@@ -715,7 +715,7 @@ function DataEntry({ entryKey, count, type, value, data, size, referencedIds, sh
                                 open={isItemExpanded}
                                 onToggle={(e) => {
                                   if (e.target === e.currentTarget) {
-                                    setExpandedNestedKey(e.currentTarget.open ? item.key : null)
+                                    setExpandedNestedKey(e.currentTarget?.open ? item.key : null)
                                   }
                                 }}
                               >
@@ -777,7 +777,7 @@ function DataEntry({ entryKey, count, type, value, data, size, referencedIds, sh
                     open={isNestedExpanded}
                     onToggle={(e) => {
                       if (e.target === e.currentTarget) {
-                        setExpandedNestedKey(e.currentTarget.open ? nestedKey : null)
+                        setExpandedNestedKey(e.currentTarget?.open ? nestedKey : null)
                       }
                     }}
                   >
@@ -1897,6 +1897,7 @@ function LazyChildren({ node, path, depth, resolveQueryValue }: { node: AnyRecor
 
   const onToggle = useCallback((e: React.SyntheticEvent<HTMLDetailsElement>) => {
     const el = e.currentTarget
+    if (!el) return
     if (el.open) {
       hydrate()
     } else {
