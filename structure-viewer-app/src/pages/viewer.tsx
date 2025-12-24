@@ -88,6 +88,33 @@ const DATA_MAP_MAPPINGS: Record<string, string> = {
   'breakpointVariantsQuery': 'variants_data'
 }
 
+// Filter out excluded data items from JSON at the source
+function filterExcludedData(data: AnyRecord, excludedItems: string[]): AnyRecord {
+  if (!data || typeof data !== 'object' || excludedItems.length === 0) return data
+  const filtered = { ...data }
+  for (const key of excludedItems) {
+    delete filtered[key]
+  }
+  if (filtered.data && typeof filtered.data === 'object') {
+    filtered.data = { ...filtered.data }
+    for (const key of excludedItems) {
+      delete filtered.data[key]
+    }
+  }
+  return filtered
+}
+
+// Load excluded data items from config at module level
+let excludedDataItems: string[] = []
+if (typeof window !== 'undefined') {
+  fetch('/config.json')
+    .then(r => r.json())
+    .then(c => {
+      if (Array.isArray(c?.excludedDataItems)) excludedDataItems = c.excludedDataItems
+    })
+    .catch(() => {})
+}
+
 export default function Viewer() {
   const [status, setStatus] = useState('')
   const [root, setRoot] = useState<AnyRecord | null>(null)
@@ -251,7 +278,9 @@ export default function Viewer() {
     setIsLoading(true)
     const res = await fetch(`/api/page-json?url=${encodeURIComponent(url)}`)
     if (!res.ok) throw new Error(`Failed: ${res.status}`)
-    const data = await res.json()
+    // Filter excluded data items right after fetch so all downstream logic ignores them
+    let data = await res.json()
+    data = filterExcludedData(data, excludedDataItems)
     try {
       const size = new TextEncoder().encode(JSON.stringify(data)).length
       setJsonSizeBytes(size)
